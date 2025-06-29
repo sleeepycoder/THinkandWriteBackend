@@ -58,14 +58,14 @@ const userSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Virtual for follower count
+// Virtual for follower count - Fixed to handle undefined arrays
 userSchema.virtual('followerCount').get(function() {
-  return this.followers.length;
+  return this.followers ? this.followers.length : 0;
 });
 
-// Virtual for following count
+// Virtual for following count - Fixed to handle undefined arrays
 userSchema.virtual('followingCount').get(function() {
-  return this.following.length;
+  return this.following ? this.following.length : 0;
 });
 
 // Hash password before saving
@@ -81,11 +81,38 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Remove password from output
+// Remove password from output - Enhanced to handle virtual field errors
 userSchema.methods.toJSON = function() {
-  const userObject = this.toObject();
-  delete userObject.password;
-  return userObject;
+  try {
+    const userObject = this.toObject();
+    delete userObject.password;
+    
+    // Ensure virtual fields are properly calculated
+    if (!userObject.followerCount && typeof userObject.followerCount !== 'number') {
+      userObject.followerCount = this.followers ? this.followers.length : 0;
+    }
+    if (!userObject.followingCount && typeof userObject.followingCount !== 'number') {
+      userObject.followingCount = this.following ? this.following.length : 0;
+    }
+    
+    return userObject;
+  } catch (error) {
+    console.error('Error in User toJSON:', error);
+    // Return a safe fallback object
+    return {
+      _id: this._id,
+      name: this.name,
+      email: this.email,
+      avatar: this.avatar,
+      bio: this.bio || '',
+      followerCount: 0,
+      followingCount: 0,
+      isVerified: this.isVerified || false,
+      role: this.role || 'user',
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt
+    };
+  }
 };
 
 export default mongoose.model('User', userSchema);
